@@ -1,0 +1,7 @@
+{
+  "esm": "all",
+  "cjs": {
+    "interop": true,
+    "namedExports": true
+  }
+}
