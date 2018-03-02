@@ -56,7 +56,7 @@ function initRoom(roomId) {
     watcher: channel.watch((message) => {
       console.log(message);
       if (message.type === 'URL') {
-        room.href = message.href;  
+        room.href = message.href;
       }
     })
   };

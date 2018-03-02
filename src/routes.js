@@ -7,8 +7,8 @@ const router = new Router();
 router
   .get('/', (ctx) => {
     ctx.body = 'Hello!'
-  }).
-  post('/', (ctx) => {
+  })
+  .post('/', (ctx) => {
     let roomId;
     do {
       roomId = randomBase62(5);
