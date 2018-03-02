@@ -1,20 +1,30 @@
 import http from 'http';
+import cors from 'kcors';
 import Koa from 'koa';
 import { SCServer } from 'socketcluster-server';
 
 import routes from './routes';
-import { isBase62, randomBase62 } from './utils';
+import { isBase62 } from './utils';
 
 const app = new Koa();
+export default app;
+
 app.server = http.createServer(app.callback());
 app.scServer = new SCServer({
   httpServer: app.server,
   socketChannelLimit: 1
 });
 
+app.use(cors());
 app.use(routes);
 
-const rooms = new Map();
+const ALLOWED_MESSAGES = [
+  'URL',
+  'PLAYING',
+  'PAUSE'
+];
+
+const rooms = app.context.rooms = new Map();
 
 app.scServer.addMiddleware('subscribe', (req, next) => {
   if (req.channel.length !== 5 || !isBase62(req.channel)) {
@@ -25,6 +35,9 @@ app.scServer.addMiddleware('subscribe', (req, next) => {
 
 app.scServer.addMiddleware('publishIn', (req, next) => {
   if (!req.data) return next(new Error('Message cannot be empty'));
+  if (!ALLOWED_MESSAGES.includes(req.data.type)) {
+    return next(new Error('Bad message type'));
+  }
   req.data.socket = req.socket.id;
   next();
 });
@@ -52,13 +65,6 @@ function initRoom(roomId) {
 
 app.scServer.on('connection', (socket) => {
   console.log(socket.id + ' connected');
-  socket.on('get_room', (data, respond) => {
-    let roomId;
-    do {
-      roomId = randomBase62(5);
-    } while (rooms.has(roomId));
-    respond(null, roomId);
-  });
   socket.on('disconnect', () => {
     console.log(socket.id + ' disconnected');
   });
@@ -71,7 +77,7 @@ app.scServer.on('connection', (socket) => {
     room.users++;
     socket.emit('#publish', {
       channel: channelName,
-      data: { type: 'OBSERVE_MEDIA', href: room.href }
+      data: { type: 'SYNCHRONIZE', href: room.href }
     });
   });
   socket.on('unsubscribe', (channelName) => {
@@ -85,5 +91,3 @@ app.scServer.on('connection', (socket) => {
     }
   });
 });
-
-export default app;

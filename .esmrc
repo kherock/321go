@@ -1,7 +1,7 @@
 {
-  "esm": "all",
+  "esm": "js",
   "cjs": {
-    "interop": true,
+    "cache": true,
     "namedExports": true
   }
 }
