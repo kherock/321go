@@ -12,6 +12,7 @@
   "license": "MIT",
   "dependencies": {
     "@std/esm": "^0.23.4",
+    "kcors": "^2.2.1",
     "koa": "^2.5.0",
     "koa-router": "^7.4.0",
     "socketcluster-server": "^10.0.1"
