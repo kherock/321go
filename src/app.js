@@ -1,19 +1,17 @@
 import http from 'http';
 import cors from 'kcors';
 import Koa from 'koa';
-import { SCServer } from 'socketcluster-server';
+import KoaWsUpgrade from './lib/koa-ws-upgrade';
 
+import Room from './models/room';
 import routes from './routes';
-import { isBase62 } from './utils';
+import { isBase62, randomBase62 } from './utils';
 
 const app = new Koa();
 export default app;
 
-app.server = http.createServer(app.callback());
-app.scServer = new SCServer({
-  httpServer: app.server,
-  socketChannelLimit: 1
-});
+app.server = http.createServer();
+app.ws = new KoaWsUpgrade();
 
 app.use(cors());
 app.use(routes);
@@ -24,70 +22,43 @@ const ALLOWED_MESSAGES = [
   'PAUSE'
 ];
 
-const rooms = app.context.rooms = new Map();
-
-app.scServer.addMiddleware('subscribe', (req, next) => {
-  if (req.channel.length !== 5 || !isBase62(req.channel)) {
-    return next(new Error('Bad room ID'));
+app.ws.use((ctx, next) => {
+  ctx.state.channelName = ctx.path.slice(1);
+  if (ctx.state.channelName.length !== 5 || !isBase62(ctx.state.channelName)) {
+    ctx.throw(400, 'Bad room ID');
   }
-  next();
+  return next();
 });
 
-app.scServer.addMiddleware('publishIn', (req, next) => {
-  if (!req.data) return next(new Error('Message cannot be empty'));
-  if (!ALLOWED_MESSAGES.includes(req.data.type)) {
-    return next(new Error('Bad message type'));
-  }
-  req.data.socket = req.socket.id;
-  next();
-});
+app.server.on('request', app.callback());
+app.server.on('upgrade', app.ws.callback());
 
-app.scServer.addMiddleware('publishOut', (req, next) => {
-  if (req.data.socket === req.socket.id) return next(true);
-  req.data = { ...req.data };
-  delete req.data.socket;
-  next();
-});
+app.ws.on('connection', (socket, state) => {
+  socket.id = randomBase62(15);
+  console.log(socket.id + ' joined ' + state.channelName);
 
-function initRoom(roomId) {
-  const channel = app.scServer.exchange.subscribe(roomId);
-  const room = {
-    users: 0,
-    watcher: channel.watch((message) => {
-      console.log(message);
-      if (message.type === 'URL') {
-        room.href = message.href;
-      }
-    })
-  };
-  rooms.set(roomId, room);
-}
+  const room = Room.get(state.channelName);
+  room.join(socket);
 
-app.scServer.on('connection', (socket) => {
-  console.log(socket.id + ' connected');
-  socket.on('disconnect', () => {
-    console.log(socket.id + ' disconnected');
-  });
-  socket.on('subscribe', (channelName) => {
-    console.log(socket.id + ' subscribed to ' + channelName);
-    if (!rooms.has(channelName)) {
-      initRoom(channelName);
+  socket.send(JSON.stringify({ type: 'SYNCHRONIZE', href: room.href }));
+  socket.on('message', (message) => {
+    try {
+      message = JSON.parse(message);
+    } catch (err) {}
+    console.log(message);
+    if (!message) return;
+    if (!ALLOWED_MESSAGES.includes(message.type)) return;
+
+    const room = Room.get(state.channelName);
+    if (message.type === 'URL') {
+      room.href = message.href;
     }
-    const room = rooms.get(channelName);
-    room.users++;
-    socket.emit('#publish', {
-      channel: channelName,
-      data: { type: 'SYNCHRONIZE', href: room.href }
-    });
+    room.broadcast(socket, message);
   });
-  socket.on('unsubscribe', (channelName) => {
-    console.log(socket.id + ' unsubscribed from ' + channelName);
-    const room = rooms.get(channelName);
-    room.users--;
-    if (!room.users) {
-      app.scServer.exchange.channel(channelName).destroy();
-      rooms.delete(channelName);
-      console.log('room ' + channelName + ' destroyed');
-    }
+
+  socket.on('close', () => {
+    console.log(socket.id + ' left ' + state.channelName);
+    const room = Room.get(state.channelName);
+    room.leave(socket);
   });
 });
