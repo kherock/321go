@@ -1,7 +1,8 @@
 {
-  "esm": "js",
+  "mode": "auto",
   "cjs": {
     "cache": true,
     "namedExports": true
-  }
+  },
+  "sourceMap": false
 }
