@@ -1,7 +1,7 @@
 import Router from 'koa-router';
 
 import Room from './models/room';
-import { randomBase62 } from './utils';
+import { isBase62, randomBase62 } from './utils';
 
 const router = new Router();
 
@@ -18,8 +18,9 @@ router
   });
 
 router
-  .get('/:roomId', (ctx) => {
-    const room = Room.get(ctx.params.roomId);
+  .get('/:roomId', async (ctx) => {
+    let room = Room.get(ctx.params.roomId);
+    if (ctx.upgrade) return ctx.upgrade();
     if (!room || !room.href) ctx.throw(404);
     switch (ctx.accepts('json', 'html')) {
     case 'json':
@@ -30,5 +31,10 @@ router
       break;
     }
   });
+
+router.param('roomId', (id, ctx, next) => {
+  if (id.length !== 5 || !isBase62(id)) ctx.throw(400, 'Bad room ID');
+  return next();
+});
 
 export default router.routes();

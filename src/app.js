@@ -1,37 +1,29 @@
 import http from 'http';
 import cors from 'kcors';
 import Koa from 'koa';
+import mount from 'koa-mount';
 import KoaWsUpgrade from './lib/koa-ws-upgrade';
 
 import Room from './models/room';
 import routes from './routes';
-import { isBase62, randomBase62 } from './utils';
+import { randomBase62 } from './utils';
 
 const app = new Koa();
-export default app;
-
-app.server = http.createServer();
 app.ws = new KoaWsUpgrade();
+app.server = http.createServer();
+export default app;
 
 app.use(cors());
 app.use(routes);
 
-app.ws.use((ctx, next) => {
-  ctx.state.channelName = ctx.path.slice(1);
-  if (ctx.state.channelName.length !== 5 || !isBase62(ctx.state.channelName)) {
-    ctx.throw(400, 'Bad room ID');
-  }
-  return next();
-});
-
-app.server.on('request', app.callback());
-app.server.on('upgrade', app.ws.callback());
-
-app.ws.on('connection', (socket, state) => {
+app.ws.use(mount(app));
+app.ws.on('connection', (socket, ctx) => {
   socket.id = randomBase62(15);
-  console.log(socket.id + ' joined ' + state.channelName);
+  const { roomId } = ctx.params;
+  console.log(socket.id + ' joined room ' + roomId);
 
-  Room.get(state.channelName).join(socket);
+  const room = Room.ensureExists(roomId);
+  room.join(socket);
 
   socket.on('message', (message) => {
     try {
@@ -41,13 +33,14 @@ app.ws.on('connection', (socket, state) => {
     if (!message) return;
     if (!Room.ALLOWED_MESSAGES.includes(message.type)) return;
 
-    const room = Room.get(state.channelName);
-    room.broadcast(socket, message);
+    room.broadcast(message, socket);
   });
 
   socket.on('close', () => {
-    console.log(socket.id + ' left ' + state.channelName);
-    const room = Room.get(state.channelName);
+    console.log(socket.id + ' left ' + room.id);
     room.leave(socket);
   });
 });
+
+app.server.on('request', app.callback());
+app.server.on('upgrade', app.ws.callback());

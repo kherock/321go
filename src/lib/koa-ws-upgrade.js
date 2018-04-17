@@ -1,19 +1,24 @@
-const debug = require('debug')('koa-ws');
+const debug = require('debug')('koa-ws-upgrade');
 const http = require('http');
 const Koa = require('koa');
 const compose = require('koa-compose');
 const ws = require('ws');
 
-const wsServer = Symbol('koa-ws');
+const kWsServer = Symbol('wss');
 
-module.exports = class Application extends Koa {
+module.exports = class WsApplication extends Koa {
   constructor(WsServer = ws.Server) {
     super();
-    this[wsServer] = new WsServer({ noServer: true });
-    this.clients = this[wsServer].clients;
-    this.use((ctx, next) => {
+    this[kWsServer] = new WsServer({ noServer: true });
+    this.clients = this[kWsServer].clients;
+    this.use(async (ctx, next) => {
+      if (!ctx.upgrade) return next();
+
       ctx.res.statusCode = 101;
-      return next();
+      await next();
+      if (ctx.respond !== false && ctx.status === 101) {
+        await ctx.upgrade();
+      }
     });
   }
 
@@ -46,45 +51,17 @@ module.exports = class Application extends Koa {
     return handleUpgrade;
   }
 
-  createContext(req, socket, upgradeHead) {
-    const dummyRes = {
-      end(message) {
-        if (this.statusCode !== 101) {
-          abortHandshake(socket, this.statusCode, message || this.statusMessage);
-        } else {
-          context.app[wsServer].handleUpgrade(req, socket, upgradeHead, (ws) => {
-            context.app.emit('connection', ws, context.state);
-          });
-        }
-      },
-      getHeader() {},
-      setHeader() {}
+  createContext(req, socket, head) {
+    const res = new http.ServerResponse(req);
+    res.assignSocket(socket);
+    const context = super.createContext(req, res);
+    context.upgrade = context.response.upgrade = async function upgrade() {
+      context.respond = false;
+      const client = await new Promise(resolve => context.app[kWsServer].handleUpgrade(req, socket, head, resolve));
+      context.app.emit('connection', client, context);
+      return client;
     };
-    const context = super.createContext(req, dummyRes);
 
     return context;
   }
-}
-
-/**
- * Close the connection when preconditions are not fulfilled.
- *
- * @param {net.Socket} socket The socket of the upgrade request
- * @param {Number} code The HTTP response status code
- * @param {String} [message] The HTTP response body
- * @private
- */
-function abortHandshake(socket, code, message) {
-  if (socket.writable) {
-    message = message || http.STATUS_CODES[code];
-    socket.write(
-      `HTTP/1.1 ${code} ${http.STATUS_CODES[code]}\r\n` +
-      'Connection: close\r\n' +
-      'Content-type: text/html\r\n' +
-      `Content-Length: ${Buffer.byteLength(message)}\r\n` +
-      '\r\n' +
-      message
-    );
-  }
-  socket.destroy();
-}
+};
