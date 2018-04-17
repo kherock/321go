@@ -5,12 +5,15 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Node: Nodemon",
       "type": "node",
-      "request": "attach",
-      "processId": "${command:PickProcess}",
+      "request": "launch",
+      "name": "Node: nodemon",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/nodemon",
+      "runtimeArgs": ["-r", "esm"],
+      "program": "${workspaceFolder}/server.js",
       "restart": true,
-      "protocol": "inspector",
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen"
     }
   ]
 }

@@ -55,5 +55,5 @@ export default class Room {
 Room.ALLOWED_MESSAGES = [
   'URL',
   'PLAYING',
-  'PAUSE'
+  'PAUSE',
 ];

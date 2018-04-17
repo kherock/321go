@@ -24,7 +24,7 @@ module.exports = class Application extends Koa {
 
       res.writeHead(426, {
         'Content-Length': body.length,
-        'Content-Type': 'text/plain'
+        'Content-Type': 'text/plain',
       });
       res.end(body);
     });
@@ -40,7 +40,7 @@ module.exports = class Application extends Koa {
 
     const handleUpgrade = (req, socket, head) => {
       const ctx = this.createContext(req, socket, head);
-      this.handleRequest(ctx, fn)
+      this.handleRequest(ctx, fn);
     };
 
     return handleUpgrade;
