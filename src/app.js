@@ -16,12 +16,6 @@ app.ws = new KoaWsUpgrade();
 app.use(cors());
 app.use(routes);
 
-const ALLOWED_MESSAGES = [
-  'URL',
-  'PLAYING',
-  'PAUSE'
-];
-
 app.ws.use((ctx, next) => {
   ctx.state.channelName = ctx.path.slice(1);
   if (ctx.state.channelName.length !== 5 || !isBase62(ctx.state.channelName)) {
@@ -37,22 +31,17 @@ app.ws.on('connection', (socket, state) => {
   socket.id = randomBase62(15);
   console.log(socket.id + ' joined ' + state.channelName);
 
-  const room = Room.get(state.channelName);
-  room.join(socket);
+  Room.get(state.channelName).join(socket);
 
-  socket.send(JSON.stringify({ type: 'SYNCHRONIZE', href: room.href }));
   socket.on('message', (message) => {
     try {
       message = JSON.parse(message);
     } catch (err) {}
     console.log(message);
     if (!message) return;
-    if (!ALLOWED_MESSAGES.includes(message.type)) return;
+    if (!Room.ALLOWED_MESSAGES.includes(message.type)) return;
 
     const room = Room.get(state.channelName);
-    if (message.type === 'URL') {
-      room.href = message.href;
-    }
     room.broadcast(socket, message);
   });
 

@@ -11,27 +11,49 @@ export default class Room {
 
   constructor(id) {
     this.id = id;
-    this.clients = new Set();
+    this.users = new Set();
     rooms.set(id, this);
   }
 
   join(socket) {
-    this.clients.add(socket);
+    this.users.add(socket);
+    socket.send(JSON.stringify({ type: 'SYNCHRONIZE', ...this.toJSON() }));
   }
 
   leave(socket) {
-    this.clients.delete(socket);
-    if (!this.clients.size) {
+    this.users.delete(socket);
+    if (!this.users.size) {
       rooms.delete(this.id);
       console.log('room ' + this.id + ' destroyed');
     }
   }
 
   broadcast(fromSocket, message) {
-    for (const socket of this.clients) {
+    switch (message.type) {
+    case 'URL':
+      this.href = message.href;
+      break;
+    case 'PLAYING':
+      this.state = 'playing';
+      break;
+    case 'PAUSE':
+      this.state = 'paused';
+      break;
+    default:
+      break;
+    }
+    for (const socket of this.users) {
       if (socket === fromSocket) continue;
       socket.send(JSON.stringify(message));
-    }  
+    }
+  }
+
+  toJSON() {
+    return { ...this, user: this.users.size }
   }
 }
-
+Room.ALLOWED_MESSAGES = [
+  'URL',
+  'PLAYING',
+  'PAUSE'
+];
