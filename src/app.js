@@ -26,11 +26,15 @@ app.ws.on('connection', (socket, ctx) => {
   room.join(socket);
 
   socket.on('message', (message) => {
+    if (message instanceof Buffer && !message.length) {
+      // heartbeat
+      return socket.send();
+    }
     try {
       message = JSON.parse(message);
-    } catch (err) {}
-    console.log(message);
+    } catch (err) { return; }
     if (!message) return;
+    console.log(message);
     if (!Room.ALLOWED_MESSAGES.includes(message.type)) return;
 
     room.broadcast(message, socket);
