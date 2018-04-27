@@ -50,6 +50,9 @@ export default class Room {
     switch (message.type) {
     case 'URL':
       this.href = message.href;
+      this.state = undefined;
+      this[kPlayerTime] = undefined;
+      this[kServerTime] = undefined;
       break;
     case 'PLAYING':
       this.state = 'playing';
